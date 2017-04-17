@@ -1,8 +1,4 @@
 
-## 0. 最终效果
-
-![demo](https://github.com/kompasim/android-wechat-tool/raw/master/demo.png)
-
 
 ## 1. Accessibility介绍
 
