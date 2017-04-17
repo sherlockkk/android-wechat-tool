@@ -19,7 +19,9 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class MoneyService extends AccessibilityService {
+import kompasim.tcp.TCPClient;
+
+public class MoneyService extends AccessibilityService implements TCPClient.OnMessageReceived {
 
     private List<AccessibilityNodeInfo> parents = new ArrayList<>();
     private boolean isMoneyOpenedAlready = false;
@@ -29,15 +31,15 @@ public class MoneyService extends AccessibilityService {
     private String ANSWER = "answer";
     private String whatIsIt = NONE;
 
+    private TCPClient mTcpClient = null;
+
     public MoneyService() {
     }
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-//        Toast.makeText(this, "左边的按钮抢红包，右边的自动回复！ ", Toast.LENGTH_LONG).show();
         Log.e("--->", "connect");
-
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         // 响应事件的类型，这里是全部的响应事件（长按，单击，滑动等）
         info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
@@ -47,22 +49,24 @@ public class MoneyService extends AccessibilityService {
         String[] packageNames = {"com.tencent.mm"};
         info.packageNames = packageNames;
         setServiceInfo(info);
+        //初始化TCP客户端
+        mTcpClient = new TCPClient(this);
     }
+
+    StringTest strings = new StringTest();
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         int eventType = event.getEventType();
-        StringTest strings = new StringTest();
         switch (eventType) {
             //当通知栏发生改变时
             case AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED:
-                Log.e("--->", "wechat");
                 Log.e("--->", event.getText().toString());
-                String[] strs = event.getText().toString().split(":");
-                strings.strs = strs;
-                Toast.makeText(this, "收到" + strs[0].substring(1) + "的消息：" + strs[1].substring(0, strs[1].length() - 1), Toast.LENGTH_SHORT).show();
+                String[] splits = event.getText().toString().split(":");
+                strings.strs = splits;
+                sendTcpMsg(splits);
+                Toast.makeText(this, "收到" + strings.strs[0].substring(1) + "的消息：" + strings.strs[1].substring(0, strings.strs[1].length() - 1), Toast.LENGTH_SHORT).show();
                 Log.e("--->", event.getClassName().toString());
-                //
                 List<CharSequence> texts = event.getText();
                 if (!texts.isEmpty()) {
                     for (CharSequence text : texts) {
@@ -141,8 +145,8 @@ public class MoneyService extends AccessibilityService {
 //                            return;
 //                        }
                         Log.e("songjian", "启动，自动回复");
-//                        answer(event, strings.strs);
-                        answer(event);
+                        answer(event, strings.strs);
+//                        answer(event);
                     }
                 } else if (className.equals("com.tencent.mm.plugin.luckymoney.ui.En_fba4b94f")) {
                     //开红包
@@ -153,11 +157,6 @@ public class MoneyService extends AccessibilityService {
 
                     //退出红包
                     Log.e("songjian", "抢完，退出红包");
-//                    inputClick("com.tencent.mm:id/gw");
-//                    com.tencent.mm:id/bfw    私包红包金额显示ID
-//                    com.tencent.mm:id/bjn     群红包红包领取者name ID
-//                    com.tencent.mm:id/bjr     群红包红包领取金额ID
-//                    com.tencent.mm:id/bgd     私包页面“留言”TextviewID
                     AccessibilityNodeInfo node = getRootInActiveWindow();
                     if (node != null) {
                         //如果页面有带有“消费”字样,则为群红包，带有“提现”字样，则为私包
@@ -171,10 +170,6 @@ public class MoneyService extends AccessibilityService {
                             obtainNodeText("com.tencent.mm:id/bfw");
                         }
                     }
-
-//                    obtainNodeText("com.tencent.mm:id/gw");
-
-
                     performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
                     performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
                     performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
@@ -184,6 +179,7 @@ public class MoneyService extends AccessibilityService {
                 break;
         }
     }
+
 
     /**
      * 回复指定消息
@@ -385,9 +381,37 @@ public class MoneyService extends AccessibilityService {
         whatIsIt = NONE;
     }
 
-
+    /**
+     * 服务被中断时回调
+     */
     @Override
     public void onInterrupt() {
+        mTcpClient.stopClient();
+    }
+
+    /**
+     * 发送收到的消息给TCP服务器
+     *
+     * @param splits
+     */
+    private void sendTcpMsg(final String[] splits) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (mTcpClient != null) {
+                    mTcpClient.sendMessage(splits[0] + "：" + splits[1]);
+                }
+            }
+        }).start();
+    }
+
+    /**
+     * 接收TCP服务器消息
+     *
+     * @param message
+     */
+    @Override
+    public void messageReceived(String message) {
 
     }
 }
