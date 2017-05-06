@@ -1,9 +1,10 @@
-package kompasim.tcp;
+package sherlockkk.tcp;
 
 import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -25,7 +26,7 @@ public class TCPClient {
      * 指定服务器Ip地址，端口号
      */
     public static final String SERVERIP = "192.168.191.1"; // your computer IP address
-    public static final int SERVERPORT = 11111;
+    public static final int SERVERPORT = 9999;
     private OnMessageReceived mMessageListener = null;
     private boolean mRun = false;
 
@@ -48,32 +49,40 @@ public class TCPClient {
      */
     public void sendMessage(String message) {
         if (out != null && !out.checkError()) {
-            System.out.println("message: " + message);
             out.println(message);
             out.flush();
+
+            System.out.println("TCPClient send message: " + message);
         }
     }
 
     public void stopClient() {
         mRun = false;
+        try {
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
+
+    Socket socket;
 
     public void run() {
 
         mRun = true;
 
         try {
-            InetAddress serverAddr = InetAddress.getByName(SERVERIP);
+//            InetAddress serverAddr = InetAddress.getByName(SERVERIP);
 
             Log.e("TCP SI Client", "SI: Connecting...");
 
             //创建socket连接服务器
-            Socket socket = new Socket(serverAddr, SERVERPORT);
+            socket = new Socket(SERVERIP, SERVERPORT);
             try {
 
                 //发送消息给服务器
-                out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
-
+//                out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
+                out = new PrintWriter(socket.getOutputStream());
                 Log.e("TCP SI Client", "SI: Sent.");
 
                 Log.e("TCP SI Client", "SI: Done.");

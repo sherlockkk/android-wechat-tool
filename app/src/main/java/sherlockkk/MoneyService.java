@@ -1,4 +1,4 @@
-package kompasim;
+package sherlockkk;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
@@ -14,12 +14,16 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Toast;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import kompasim.tcp.TCPClient;
+import sherlockkk.tcp.TCPClient;
+
 
 public class MoneyService extends AccessibilityService implements TCPClient.OnMessageReceived {
 
@@ -51,6 +55,12 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         setServiceInfo(info);
         //初始化TCP客户端
         mTcpClient = new TCPClient(this);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                mTcpClient.run();
+            }
+        }).start();
     }
 
     StringTest strings = new StringTest();
@@ -72,12 +82,6 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                     for (CharSequence text : texts) {
                         String content = text.toString();
                         if (content.contains("[微信红包]")) {
-                            /**
-                             * -----------------
-                             */
-//                            if (!MyApplication.money_.isChecked()) {
-//                                return;
-//                            }
                             whatIsIt = MONEY;
                             //模拟打开通知栏消息，即打开微信
                             if (event.getParcelableData() != null && event.getParcelableData() instanceof Notification) {
@@ -85,26 +89,16 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                                 PendingIntent pendingIntent = notification.contentIntent;
                                 try {
                                     pendingIntent.send();
-                                    Log.e("songjian:", "进入微信1");
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }
                             }
                         } else {
-                            /**
-                             * -----------------
-                             */
-//                            if (!MyApplication.answer_.isChecked()) {
-//                                return;
-//                            }
                             whatIsIt = ANSWER;
                             //模拟打开通知栏消息，即打开微信
                             if (event.getParcelableData() != null && event.getParcelableData() instanceof Notification) {
                                 Notification notification = (Notification) event.getParcelableData();
                                 PendingIntent pendingIntent = notification.contentIntent;
-                                // kompsdim is it tencent
-                                //
-                                //
                                 try {
                                     pendingIntent.send();
                                     Log.e("songjian:", "进入微信2");
@@ -118,43 +112,19 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                 break;
             //当窗口的状态发生改变时
             case AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED:
-                Log.e("--->", "wechat");
-                Log.e("text--->", event.getText().toString());
-                Log.e("class--->", event.getClassName().toString());
-                // Log.e("kompasim:", getRootInActiveWindow().toString());
-
-
                 String className = event.getClassName().toString();
                 if (className.equals("com.tencent.mm.ui.LauncherUI")) {
                     //点击最后一个红包
                     Log.e("what-->", whatIsIt);
                     if (whatIsIt == MONEY) {
-                        /**
-                         * -----------------
-                         */
-//                        if (!MyApplication.money_.isChecked()) {
-//                            return;
-//                        }
-                        Log.e("songjian", "启动，点击红包");
-                        getLastPacket(event);
+                        getLastPacket();
                     } else if (whatIsIt == ANSWER) {
-                        /**
-                         * -----------------
-                         */
-//                        if (!MyApplication.answer_.isChecked()) {
-//                            return;
-//                        }
-                        Log.e("songjian", "启动，自动回复");
                         answer(event, strings.strs);
-//                        answer(event);
                     }
                 } else if (className.equals("com.tencent.mm.plugin.luckymoney.ui.En_fba4b94f")) {
-                    //开红包
                     Log.e("songjian", "开红包");
                     inputClick("com.tencent.mm:id/bjj");
                 } else if (className.equals("com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyDetailUI")) {
-
-
                     //退出红包
                     Log.e("songjian", "抢完，退出红包");
                     AccessibilityNodeInfo node = getRootInActiveWindow();
@@ -297,7 +267,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
     /**
      * 获取List中最后一个红包，并进行模拟点击
      */
-    private void getLastPacket(AccessibilityEvent event) {
+    private void getLastPacket() {
         AccessibilityNodeInfo rootNode = getRootInActiveWindow();
         if (rootNode == null) {
             Log.e(">>>", "rootNode is　null");
@@ -399,7 +369,15 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             @Override
             public void run() {
                 if (mTcpClient != null) {
-                    mTcpClient.sendMessage(splits[0] + "：" + splits[1]);
+                    JSONObject jsonObject = new JSONObject();
+                    try {
+                        jsonObject.put("name", "1111");
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    mTcpClient.sendMessage("10 {\"aaa\":\"bbb\"}<END>\r\n");
+                    mTcpClient.sendMessage("10 " + jsonObject + "<END>\r\n");
+//                    mTcpClient.sendMessage(splits[0] + "：" + splits[1]);
                 }
             }
         }).start();
@@ -412,7 +390,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
      */
     @Override
     public void messageReceived(String message) {
-
+        Log.i("messageReceived", "messageReceived: " + message);
     }
 }
 

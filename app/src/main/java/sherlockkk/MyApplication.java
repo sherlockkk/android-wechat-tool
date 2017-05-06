@@ -1,4 +1,4 @@
-package kompasim;
+package sherlockkk;
 
 import android.app.Application;
 import android.content.ComponentName;

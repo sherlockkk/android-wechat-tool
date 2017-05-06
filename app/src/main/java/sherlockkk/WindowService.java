@@ -1,4 +1,4 @@
-package kompasim;
+package sherlockkk;
 
 import android.animation.Animator;
 import android.animation.ObjectAnimator;
@@ -21,7 +21,7 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import com.example.alvido_bahor.wechattool.R;
+import com.sherlockkk.wechattool.R;
 import com.suke.widget.SwitchButton;
 
 
