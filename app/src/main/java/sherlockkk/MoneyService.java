@@ -4,23 +4,16 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Notification;
 import android.app.PendingIntent;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
-import android.content.Intent;
-import android.os.Bundle;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.widget.Toast;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 
 import sherlockkk.tcp.TCPClient;
 
@@ -31,7 +24,13 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
     private List<AccessibilityNodeInfo> parents = new ArrayList<>();
     private boolean isMoneyOpenedAlready = false;
     private TCPClient mTcpClient = null;
+    private StringSender stringSender;
 
+    int msgId = 0;//消息ID
+    List<String> nameList = new ArrayList<>();//领取者的集合
+    List<String> sumList = new ArrayList<>();//领取金额的集合
+    long openTime;//打开红包的时间
+    long time;//收到红包消息时间
 
     public MoneyService() {
     }
@@ -64,6 +63,8 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         switch (eventType) {
             //当通知栏发生改变时
             case AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED:
+                stringSender = new StringSender();
+                stringSender.sender = event.getText().toString().split(":");
                 Log.e("--->", event.getText().toString());
                 Log.e("--->", event.getClassName().toString());
                 List<CharSequence> texts = event.getText();
@@ -91,6 +92,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                 Log.e(TAG, "onAccessibilityEvent className: " + className);
                 if (className.equals("com.tencent.mm.ui.LauncherUI")) {
                     sendTcpMsg("3 \"RedPacket Received\"<END>\r\n");
+                    time = new Date().getTime();
                 } else if (className.equals("com.tencent.mm.plugin.luckymoney.ui.En_fba4b94f")) {
                     Log.e("songjian", "开红包");
                     inputClick("com.tencent.mm:id/bjj");
@@ -126,8 +128,8 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
      * @param ids
      */
     private void obtainNodeText(String[] ids) {
-        List<String> nameList = new ArrayList<>();
-        List<String> sumList = new ArrayList<>();
+//        List<String> nameList = new ArrayList<>();
+//        List<String> sumList = new ArrayList<>();
         String name = null;
         String sum = null;
         AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
@@ -136,25 +138,95 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             for (AccessibilityNodeInfo node : list) {
                 name = node.getText().toString();
                 nameList.add(name);
-                Log.e(">>>>>", "obtainNodeText2 name: " + name);
             }
             List<AccessibilityNodeInfo> list2 = nodeInfo.findAccessibilityNodeInfosByViewId(ids[1]);
             for (AccessibilityNodeInfo node : list2) {
                 sum = node.getText().toString();
                 sumList.add(sum);
-                Log.e(">>>>>", "obtainNodeText2 name: " + sum);
             }
         }
         for (int i = 0; i < nameList.size(); i++) {
             String msg = nameList.get(i) + "领取了" + sumList.get(i);
-            sendTcpMsg("10 " + msg + "<END>\r\n");
         }
+        ++msgId;
+        try {
+            sendTcpMsg("10 " + getJson() + "<END>\r\n");
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    /**
+     * 构造json对象
+     *
+     * @return
+     * @throws JSONException
+     */
+    public JSONObject getJson() throws JSONException {
+        JSONObject dict = null;
+        JSONObject packet = null;
+        if (nameList != null) {
+            for (int i = 0; i < nameList.size(); i++) {
+                dict = new JSONObject();
+                JSONObject detail = new JSONObject();
+                detail.put("IMNickName", nameList.get(i));
+                detail.put("Amount", sumList.get(i));
+                dict.put(nameList.get(i), detail);
+            }
+            JSONObject dictOther = new JSONObject();
+            dictOther.put("LuckyDict", dict);
+            dictOther.put("Sender", getSender());
+            dictOther.put("Title", getTitle());
+            dictOther.put("OpenTime", openTime);
+            dictOther.put("LuckyCount", nameList.size());
+            packet = new JSONObject();
+            packet.put("RedPacket", dictOther);
+            packet.put("MsgID", msgId);
+            packet.put("Time", time);
+            packet.put("GroupName", null);
+            packet.put("Source", getSender());
+        }
+        return packet;
+    }
+
+    private String getTitle() {
+        String title = stringSender.sender[1].substring(0, stringSender.sender[1].length() - 1);
+        return title;
+    }
+
+    private String getSender() {
+        String sender = stringSender.sender[0].substring(1);
+        return sender;
     }
 
     /**
      * 开启子线程给tcp服务端发送信息
      *
      * @param msg
+     */
+    /*
+        "RedPacket": {
+        "LuckyDict": {
+            "张三": {
+                "IMNickName": "张三",
+                "Amount": 1.23
+            },
+            "李四": {
+                "IMNickName": "李四",
+                "Amount": 1.92
+            }
+        },
+        "Sender": "发红包人",
+        "Title": "红包文字恭喜发财",
+        "OpenTime": "/Date(-62135596800000)/",  --此处为打开红包时间
+        "LuckyCount": 2
+    },
+    "MsgID": 1,
+    "Time": "/Date(1493999743680)/",  --此处为收到红包消息时间
+    "GroupName": "群聊名称",
+    "Source": "发消息的人"
+}
      */
     private void sendTcpMsg(final String msg) {
         new Thread(new Runnable() {
@@ -173,15 +245,20 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
      * @param id
      */
     private void obtainNodeText(String id) {
-        List<String> msgSum = new ArrayList<>();
+//        List<String> msgSum = new ArrayList<>();
         AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
         if (nodeInfo != null) {
             List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId(id);
             for (AccessibilityNodeInfo item : list) {
                 String sum = item.getText().toString();
-                msgSum.add(sum);
+                sumList.add(sum);
             }
-            sendTcpMsg("10 你领取了" + msgSum + "<END>\r\n");
+            ++msgId;
+            try {
+                sendTcpMsg("10 你领取了" + getJson() + "<END>\r\n");
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -217,6 +294,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         if (parents.size() > 0) {
             parents.get(parents.size() - 1).performAction(AccessibilityNodeInfo.ACTION_CLICK);
             parents.clear();
+            openTime = new Date().getTime();
         }
     }
 
@@ -275,5 +353,12 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         if (message != null && message.contains("OpenAndReportRedPacket")) {
             getLastPacket();
         }
+    }
+
+    /**
+     * 构造一个内部类用来在case代码块间传递数据
+     */
+    class StringSender {
+        String[] sender;
     }
 }

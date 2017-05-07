@@ -3,6 +3,7 @@ package sherlockkk;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
@@ -32,6 +33,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "wake_lock");
         initView();
+        loadData();
     }
 
     @Override
@@ -82,9 +84,38 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
         Config.IP = ip;
         Config.PORT = Integer.parseInt(port);
+        saveConfig(ip, port);
         goSettingActivity();
     }
 
+    /**
+     * 保存配置信息到SharedPreferences
+     *
+     * @param ip
+     * @param port
+     */
+    private void saveConfig(String ip, String port) {
+        SharedPreferences sharedPreferences = getSharedPreferences("config", MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString("ip", ip);
+        editor.putString("port", port);
+        editor.commit();
+    }
+
+    /**
+     * 从SharedPreferences中加载配置信息
+     */
+    private void loadData() {
+        SharedPreferences sharedPreferences = getSharedPreferences("config", MODE_PRIVATE);
+        if (sharedPreferences != null) {
+            et_ip.setText(sharedPreferences.getString("ip", ""));
+            et_port.setText(sharedPreferences.getString("port", ""));
+        }
+    }
+
+    /**
+     * 跳转Activity至设置界面
+     */
     private void goSettingActivity() {
         Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
         startActivity(intent);
