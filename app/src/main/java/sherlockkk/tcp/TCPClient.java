@@ -11,6 +11,8 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
 
+import sherlockkk.Config;
+
 /**
  * Tcp 客户端
  *
@@ -25,8 +27,8 @@ public class TCPClient {
     /**
      * 指定服务器Ip地址，端口号
      */
-    public static final String SERVERIP = "192.168.191.1"; // your computer IP address
-    public static final int SERVERPORT = 9999;
+    public String serverip = ""; // your computer IP address
+    public int serverport = 0;
     private OnMessageReceived mMessageListener = null;
     private boolean mRun = false;
 
@@ -40,6 +42,8 @@ public class TCPClient {
      */
     public TCPClient(final OnMessageReceived listener) {
         mMessageListener = listener;
+        serverip = Config.IP;
+        serverport = Config.PORT;
     }
 
     /**
@@ -51,11 +55,12 @@ public class TCPClient {
         if (out != null && !out.checkError()) {
             out.println(message);
             out.flush();
-
-            System.out.println("TCPClient send message: " + message);
         }
     }
 
+    /**
+     * 断开socket连接
+     */
     public void stopClient() {
         mRun = false;
         try {
@@ -68,36 +73,24 @@ public class TCPClient {
     Socket socket;
 
     public void run() {
-
         mRun = true;
-
         try {
-//            InetAddress serverAddr = InetAddress.getByName(SERVERIP);
-
-            Log.e("TCP SI Client", "SI: Connecting...");
-
             //创建socket连接服务器
-            socket = new Socket(SERVERIP, SERVERPORT);
+            socket = new Socket(serverip, serverport);
             try {
-
                 //发送消息给服务器
-//                out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
-                out = new PrintWriter(socket.getOutputStream());
-                Log.e("TCP SI Client", "SI: Sent.");
-
-                Log.e("TCP SI Client", "SI: Done.");
-
+                out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
+                out.println("1 \"Android\"<END>\r\n");
+                out.flush();
                 //从服务器接收消息
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
+                String temp;
                 //while循环监听服务器消息
                 while (mRun) {
-                    serverMessage = in.readLine();
-
-                    if (serverMessage != null && mMessageListener != null) {
+                    while ((temp = in.readLine()) != null) {
+                        serverMessage = in.readLine();
                         //收到消息回调函数
                         mMessageListener.messageReceived(serverMessage);
-                        Log.e("RESPONSE FROM SERVER", "S: Received Message: '" + serverMessage + "'");
                     }
                     serverMessage = null;
                 }
@@ -108,17 +101,14 @@ public class TCPClient {
                 //关闭socket，释放资源
                 socket.close();
             }
-
         } catch (Exception e) {
-
             Log.e("TCP SI Error", "SI: Error", e);
-
         }
 
     }
 
     //接收消息的回调接口
     public interface OnMessageReceived {
-        public void messageReceived(String message);
+        void messageReceived(String message);
     }
 }

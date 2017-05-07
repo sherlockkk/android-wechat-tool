@@ -1,32 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center_horizontal"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="16dp">
 
-    <!--<com.suke.widget.SwitchButton-->
-    <!--android:id="@+id/switch_button"-->
-    <!--android:layout_width="wrap_content"-->
-    <!--android:layout_height="wrap_content" />-->
+    <EditText
+        android:id="@+id/et_ip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="70dp"
+        android:hint="请输入ip地址"
+        android:inputType="text"
+        android:maxLines="1" />
+
+    <EditText
+        android:id="@+id/et_port"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="请输入端口"
+        android:inputType="number"
+        android:maxLines="1" />
 
     <Button
-        android:id="@+id/start"
-        android:layout_width="wrap_content"
+        android:id="@+id/btn_go"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="点击开启服务" />
-
-    <Button
-        android:id="@+id/hongbao"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="自动抢红包" />
-
-    <Button
-        android:id="@+id/huifu"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="自动回复" />
+        android:text="确定" />
 </LinearLayout>

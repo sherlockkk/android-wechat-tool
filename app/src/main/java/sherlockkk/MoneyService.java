@@ -26,16 +26,12 @@ import sherlockkk.tcp.TCPClient;
 
 
 public class MoneyService extends AccessibilityService implements TCPClient.OnMessageReceived {
+    private static final String TAG = "MoneyService";
 
     private List<AccessibilityNodeInfo> parents = new ArrayList<>();
     private boolean isMoneyOpenedAlready = false;
-
-    private String NONE = "none";
-    private String MONEY = "money";
-    private String ANSWER = "answer";
-    private String whatIsIt = NONE;
-
     private TCPClient mTcpClient = null;
+
 
     public MoneyService() {
     }
@@ -43,7 +39,6 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        Log.e("--->", "connect");
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         // 响应事件的类型，这里是全部的响应事件（长按，单击，滑动等）
         info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
@@ -63,8 +58,6 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         }).start();
     }
 
-    StringTest strings = new StringTest();
-
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         int eventType = event.getEventType();
@@ -72,36 +65,18 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             //当通知栏发生改变时
             case AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED:
                 Log.e("--->", event.getText().toString());
-                String[] splits = event.getText().toString().split(":");
-                strings.strs = splits;
-                sendTcpMsg(splits);
-                Toast.makeText(this, "收到" + strings.strs[0].substring(1) + "的消息：" + strings.strs[1].substring(0, strings.strs[1].length() - 1), Toast.LENGTH_SHORT).show();
                 Log.e("--->", event.getClassName().toString());
                 List<CharSequence> texts = event.getText();
                 if (!texts.isEmpty()) {
                     for (CharSequence text : texts) {
                         String content = text.toString();
                         if (content.contains("[微信红包]")) {
-                            whatIsIt = MONEY;
                             //模拟打开通知栏消息，即打开微信
                             if (event.getParcelableData() != null && event.getParcelableData() instanceof Notification) {
                                 Notification notification = (Notification) event.getParcelableData();
                                 PendingIntent pendingIntent = notification.contentIntent;
                                 try {
                                     pendingIntent.send();
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                        } else {
-                            whatIsIt = ANSWER;
-                            //模拟打开通知栏消息，即打开微信
-                            if (event.getParcelableData() != null && event.getParcelableData() instanceof Notification) {
-                                Notification notification = (Notification) event.getParcelableData();
-                                PendingIntent pendingIntent = notification.contentIntent;
-                                try {
-                                    pendingIntent.send();
-                                    Log.e("songjian:", "进入微信2");
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }
@@ -113,14 +88,9 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             //当窗口的状态发生改变时
             case AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED:
                 String className = event.getClassName().toString();
+                Log.e(TAG, "onAccessibilityEvent className: " + className);
                 if (className.equals("com.tencent.mm.ui.LauncherUI")) {
-                    //点击最后一个红包
-                    Log.e("what-->", whatIsIt);
-                    if (whatIsIt == MONEY) {
-                        getLastPacket();
-                    } else if (whatIsIt == ANSWER) {
-                        answer(event, strings.strs);
-                    }
+                    sendTcpMsg("3 \"RedPacket Received\"<END>\r\n");
                 } else if (className.equals("com.tencent.mm.plugin.luckymoney.ui.En_fba4b94f")) {
                     Log.e("songjian", "开红包");
                     inputClick("com.tencent.mm:id/bjj");
@@ -150,43 +120,6 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         }
     }
 
-
-    /**
-     * 回复指定消息
-     * 回复收到的联系人跟消息
-     *
-     * @param event
-     * @param strings
-     */
-    private void answer(AccessibilityEvent event, String[] strings) {
-        AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
-        if (nodeInfo != null) {
-            List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/a3b");
-            for (AccessibilityNodeInfo item : list) {
-                Log.e("item-->", item.toString());
-                // paste
-                Bundle arguments = new Bundle();
-                arguments.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_MOVEMENT_GRANULARITY_INT,
-                        AccessibilityNodeInfo.MOVEMENT_GRANULARITY_WORD);
-                arguments.putBoolean(AccessibilityNodeInfo.ACTION_ARGUMENT_EXTEND_SELECTION_BOOLEAN,
-                        true);
-                item.performAction(AccessibilityNodeInfo.ACTION_PREVIOUS_AT_MOVEMENT_GRANULARITY,
-                        arguments);
-                item.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
-                ClipData clip = ClipData.newPlainText("label", strings[0].substring(1) + "说：" + strings[1].substring(0, strings[1].length() - 1));
-                ClipboardManager clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboardManager.setPrimaryClip(clip);
-                item.performAction(AccessibilityNodeInfo.ACTION_PASTE);
-                // send
-                inputClick("com.tencent.mm:id/a3h");
-                performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
-            }
-        }
-        performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
-        whatIsIt = NONE;
-    }
-
-
     /**
      * 通过ID数组获取群红包领取明细
      *
@@ -213,24 +146,42 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             }
         }
         for (int i = 0; i < nameList.size(); i++) {
-            Toast.makeText(this, nameList.get(i) + "领取了" + sumList.get(i), Toast.LENGTH_SHORT).show();
+            String msg = nameList.get(i) + "领取了" + sumList.get(i);
+            sendTcpMsg("10 " + msg + "<END>\r\n");
         }
-
     }
 
     /**
-     * 通过ID获取控件显示文字
+     * 开启子线程给tcp服务端发送信息
+     *
+     * @param msg
+     */
+    private void sendTcpMsg(final String msg) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (mTcpClient != null) {
+                    mTcpClient.sendMessage(msg);
+                }
+            }
+        }).start();
+    }
+
+    /**
+     * 通过ID获取控件上显示文字
      *
      * @param id
      */
     private void obtainNodeText(String id) {
+        List<String> msgSum = new ArrayList<>();
         AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
         if (nodeInfo != null) {
             List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId(id);
             for (AccessibilityNodeInfo item : list) {
-                Log.e(">>>", "obtainNodeText: " + item.getText().toString());
-                Toast.makeText(this, "领取到红包金额：" + item.getText().toString(), Toast.LENGTH_SHORT).show();
+                String sum = item.getText().toString();
+                msgSum.add(sum);
             }
+            sendTcpMsg("10 你领取了" + msgSum + "<END>\r\n");
         }
     }
 
@@ -249,20 +200,6 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         }
     }
 
-    private void backHome() {
-        TimerTask timerTask = new TimerTask() {
-            @Override
-            public void run() {
-                Intent home = new Intent(Intent.ACTION_MAIN);
-                home.addCategory(Intent.CATEGORY_HOME);
-                home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(home);
-            }
-        };
-        Timer timer = new Timer();
-        timer.schedule(timerTask, 1000);
-        performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
-    }
 
     /**
      * 获取List中最后一个红包，并进行模拟点击
@@ -276,6 +213,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             isMoneyOpenedAlready = false;
             recycle(rootNode);
         }
+
         if (parents.size() > 0) {
             parents.get(parents.size() - 1).performAction(AccessibilityNodeInfo.ACTION_CLICK);
             parents.clear();
@@ -318,40 +256,6 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
     }
 
     /**
-     * 回复固定消息
-     *
-     * @param event
-     */
-    public void answer(AccessibilityEvent event) {
-        // 回复我很忙
-        AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
-        if (nodeInfo != null) {
-            List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/a3b");
-            for (AccessibilityNodeInfo item : list) {
-                Log.e("item-->", item.toString());
-                // paste
-                Bundle arguments = new Bundle();
-                arguments.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_MOVEMENT_GRANULARITY_INT,
-                        AccessibilityNodeInfo.MOVEMENT_GRANULARITY_WORD);
-                arguments.putBoolean(AccessibilityNodeInfo.ACTION_ARGUMENT_EXTEND_SELECTION_BOOLEAN,
-                        true);
-                item.performAction(AccessibilityNodeInfo.ACTION_PREVIOUS_AT_MOVEMENT_GRANULARITY,
-                        arguments);
-                item.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
-                ClipData clip = ClipData.newPlainText("label", "我现在正忙，稍后联系你!");
-                ClipboardManager clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboardManager.setPrimaryClip(clip);
-                item.performAction(AccessibilityNodeInfo.ACTION_PASTE);
-                // send
-                inputClick("com.tencent.mm:id/a3h");
-                performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
-            }
-        }
-        performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
-        whatIsIt = NONE;
-    }
-
-    /**
      * 服务被中断时回调
      */
     @Override
@@ -359,29 +263,6 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         mTcpClient.stopClient();
     }
 
-    /**
-     * 发送收到的消息给TCP服务器
-     *
-     * @param splits
-     */
-    private void sendTcpMsg(final String[] splits) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                if (mTcpClient != null) {
-                    JSONObject jsonObject = new JSONObject();
-                    try {
-                        jsonObject.put("name", "1111");
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-                    mTcpClient.sendMessage("10 {\"aaa\":\"bbb\"}<END>\r\n");
-                    mTcpClient.sendMessage("10 " + jsonObject + "<END>\r\n");
-//                    mTcpClient.sendMessage(splits[0] + "：" + splits[1]);
-                }
-            }
-        }).start();
-    }
 
     /**
      * 接收TCP服务器消息
@@ -390,10 +271,9 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
      */
     @Override
     public void messageReceived(String message) {
-        Log.i("messageReceived", "messageReceived: " + message);
+        Log.i("MoneyService", "messageReceived: " + message);
+        if (message != null && message.contains("OpenAndReportRedPacket")) {
+            getLastPacket();
+        }
     }
-}
-
-class StringTest {
-    String[] strs = new String[]{};
 }
