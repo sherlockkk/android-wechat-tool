@@ -11,32 +11,42 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import sherlockkk.tcp.TCPClient;
+import sherlockkk.tcp.TCPServer;
 
 
-public class MoneyService extends AccessibilityService implements TCPClient.OnMessageReceived {
+public class MoneyService extends AccessibilityService implements TCPClient.OnMessageReceived, TCPServer.OnMsgReceived {
     private static final String TAG = "MoneyService";
 
-    private List<AccessibilityNodeInfo> parents = new ArrayList<>();
+    private List<AccessibilityNodeInfo> parents;
     private boolean isMoneyOpenedAlready = false;
     private TCPClient mTcpClient = null;
+    private TCPServer mTcpServer = null;
     private StringSender stringSender;
 
-    int msgId = 0;//消息ID
-    List<String> nameList = new ArrayList<>();//领取者的集合
-    List<String> sumList = new ArrayList<>();//领取金额的集合
-    long openTime;//打开红包的时间
-    long time;//收到红包消息时间
+
+    int msgId;//消息ID
+    List<String> nameList;//领取者的集合
+    List<String> sumList;//领取金额的集合
+    String openTime;//打开红包的时间
+    String time;//收到红包消息时间
 
     public MoneyService() {
     }
 
     @Override
     protected void onServiceConnected() {
+        mTcpServer = new TCPServer(this);//开启服务的时候初始化一个tcpserver
+        msgId = 0;//消息ID
+        parents = new ArrayList<>();
+        nameList = new ArrayList<>();//领取者的集合
+        sumList = new ArrayList<>();//领取金额的集合
         super.onServiceConnected();
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         // 响应事件的类型，这里是全部的响应事件（长按，单击，滑动等）
@@ -47,14 +57,14 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         String[] packageNames = {"com.tencent.mm"};
         info.packageNames = packageNames;
         setServiceInfo(info);
-        //初始化TCP客户端
-        mTcpClient = new TCPClient(this);
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                mTcpClient.run();
-            }
-        }).start();
+        sendTcpMsg("1 \"Android\"<END>\r\n");
+
+//        new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//        mTcpServer.run();
+//            }
+//        }).start();
     }
 
     @Override
@@ -92,7 +102,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                 Log.e(TAG, "onAccessibilityEvent className: " + className);
                 if (className.equals("com.tencent.mm.ui.LauncherUI")) {
                     sendTcpMsg("3 \"RedPacket Received\"<END>\r\n");
-                    time = new Date().getTime();
+                    time = getTime();
                 } else if (className.equals("com.tencent.mm.plugin.luckymoney.ui.En_fba4b94f")) {
                     Log.e("songjian", "开红包");
                     inputClick("com.tencent.mm:id/bjj");
@@ -103,12 +113,18 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                     if (node != null) {
                         //如果页面有带有“消费”字样,则为群红包，带有“提现”字样，则为私包
                         List<AccessibilityNodeInfo> nodeXiaoFei = node.findAccessibilityNodeInfosByText("消费");
+                        if (nodeXiaoFei.size() == 0) {
+                            nodeXiaoFei = node.findAccessibilityNodeInfosByText("发红包");
+                            if (nodeXiaoFei.size() == 0) {
+                                nodeXiaoFei = node.findAccessibilityNodeInfosByText("转账");
+                            }
+                        }
                         List<AccessibilityNodeInfo> nodeTiXian = node.findAccessibilityNodeInfosByText("提现");
-                        if (nodeXiaoFei != null) {
+                        if (nodeXiaoFei.size() != 0) {
                             String[] ids = new String[]{"com.tencent.mm:id/bjn", "com.tencent.mm:id/bjr"};
                             obtainNodeText(ids);
                         }
-                        if (nodeTiXian != null) {
+                        if (nodeTiXian.size() != 0) {
                             obtainNodeText("com.tencent.mm:id/bfw");
                         }
                     }
@@ -127,33 +143,37 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
      *
      * @param ids
      */
+
     private void obtainNodeText(String[] ids) {
-//        List<String> nameList = new ArrayList<>();
-//        List<String> sumList = new ArrayList<>();
-        String name = null;
-        String sum = null;
         AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
         if (nodeInfo != null) {
             List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId(ids[0]);
             for (AccessibilityNodeInfo node : list) {
-                name = node.getText().toString();
+                String name = node.getText().toString();
                 nameList.add(name);
             }
             List<AccessibilityNodeInfo> list2 = nodeInfo.findAccessibilityNodeInfosByViewId(ids[1]);
             for (AccessibilityNodeInfo node : list2) {
-                sum = node.getText().toString();
-                sumList.add(sum);
+                String sum = node.getText().toString();
+                sumList.add(sum.substring(0, sum.length() - 1));
             }
         }
         for (int i = 0; i < nameList.size(); i++) {
             String msg = nameList.get(i) + "领取了" + sumList.get(i);
+            Log.i(TAG, "obtainNodeText sumList: " + msg);
         }
         ++msgId;
         try {
-            sendTcpMsg("10 " + getJson() + "<END>\r\n");
+            sendTcpMsg("12 " + getJson() + "<END>\r\n");
+            clearData();
         } catch (JSONException e) {
             e.printStackTrace();
         }
+    }
+
+    private void clearData() {
+        nameList.clear();
+        sumList.clear();
     }
 
 
@@ -164,11 +184,10 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
      * @throws JSONException
      */
     public JSONObject getJson() throws JSONException {
-        JSONObject dict = null;
+        JSONObject dict = new JSONObject();
         JSONObject packet = null;
         if (nameList != null) {
             for (int i = 0; i < nameList.size(); i++) {
-                dict = new JSONObject();
                 JSONObject detail = new JSONObject();
                 detail.put("IMNickName", nameList.get(i));
                 detail.put("Amount", sumList.get(i));
@@ -184,7 +203,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             packet.put("RedPacket", dictOther);
             packet.put("MsgID", msgId);
             packet.put("Time", time);
-            packet.put("GroupName", null);
+            packet.put("GroupName", "");
             packet.put("Source", getSender());
         }
         return packet;
@@ -198,6 +217,12 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
     private String getSender() {
         String sender = stringSender.sender[0].substring(1);
         return sender;
+    }
+
+    private String getTime() {
+        SimpleDateFormat formatter = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss SSS a", Locale.ENGLISH);
+        String formatStr = formatter.format(new Date());
+        return formatStr;
     }
 
     /**
@@ -232,9 +257,8 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         new Thread(new Runnable() {
             @Override
             public void run() {
-                if (mTcpClient != null) {
-                    mTcpClient.sendMessage(msg);
-                }
+                mTcpClient = new TCPClient(MoneyService.this);
+                mTcpClient.sendMessage(msg);
             }
         }).start();
     }
@@ -251,11 +275,12 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId(id);
             for (AccessibilityNodeInfo item : list) {
                 String sum = item.getText().toString();
-                sumList.add(sum);
+                sumList.add(sum.substring(0, sum.length() - 1));
             }
             ++msgId;
             try {
-                sendTcpMsg("10 你领取了" + getJson() + "<END>\r\n");
+                sendTcpMsg("12 " + getJson() + "<END>\r\n");
+                clearData();
             } catch (JSONException e) {
                 e.printStackTrace();
             }
@@ -292,11 +317,12 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         }
 
         if (parents.size() > 0) {
-            parents.get(parents.size() - 1).performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            parents.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);
             parents.clear();
-            openTime = new Date().getTime();
+            openTime = getTime();
         }
     }
+
 
     /**
      * 回归函数遍历每一个节点，并将含有"领取红包"存进List中
@@ -339,19 +365,41 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
     @Override
     public void onInterrupt() {
         mTcpClient.stopClient();
+        mTcpServer.stopClient();
     }
 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        mTcpClient.stopClient();
+        mTcpServer.stopClient();
+    }
 
     /**
      * 接收TCP服务器消息
      *
-     * @param message
+     * @param message 收到的消息
      */
     @Override
     public void messageReceived(String message) {
         Log.i("MoneyService", "messageReceived: " + message);
-        if (message != null && message.contains("OpenAndReportRedPacket")) {
+    }
+
+    /**
+     * 接收TCP客户端消息
+     *
+     * @param message 收到的消息
+     */
+    @Override
+    public void msgReceived(String message) {
+        Log.i(TAG, "msgReceived: " + message);
+        if (message.contains("<END>") && message.contains("Hello")) {
+            sendTcpMsg("0 \"Android\"<END>\r\n");
+        } else if (message.contains("<END>") && message.contains("OpenAndReportRedPacket")) {
+            sendTcpMsg("0 \"OK\"<END>\r\n");
             getLastPacket();
+        } else if (message.contains("<END>") && message.substring(0, 2).equals("4 ")) {
+            sendTcpMsg("0 " + message.substring(2, message.length()) + "\r\n");
         }
     }
 

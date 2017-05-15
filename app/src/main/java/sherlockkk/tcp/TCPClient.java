@@ -5,7 +5,9 @@ import android.util.Log;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.InetAddress;
@@ -27,13 +29,25 @@ public class TCPClient {
     /**
      * 指定服务器Ip地址，端口号
      */
+    Socket socket;
     public String serverip = ""; // your computer IP address
     public int serverport = 0;
     private OnMessageReceived mMessageListener = null;
-    private boolean mRun = false;
 
-    private PrintWriter out = null;
-    private BufferedReader in = null;
+    private OutputStream outputStream = null;
+    private InputStream inputStream = null;
+
+    public TCPClient(String ip, int port) {
+        serverip = ip;
+        serverport = port;
+        try {
+            socket = new Socket(serverip, serverport);
+            outputStream = socket.getOutputStream();
+            inputStream = socket.getInputStream();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     /**
      * 构造函数
@@ -44,7 +58,15 @@ public class TCPClient {
         mMessageListener = listener;
         serverip = Config.IP;
         serverport = Config.PORT;
+        try {
+            socket = new Socket(serverip, serverport);
+            outputStream = socket.getOutputStream();
+            inputStream = socket.getInputStream();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
+
 
     /**
      * 客户端给服务端发送消息
@@ -52,9 +74,42 @@ public class TCPClient {
      * @param message 发送的消息
      */
     public void sendMessage(String message) {
-        if (out != null && !out.checkError()) {
-            out.println(message);
-            out.flush();
+        try {
+            outputStream = socket.getOutputStream();
+            if (outputStream != null) {
+                try {
+                    byte[] messageBytes = message.getBytes();
+                    outputStream.write(messageBytes, 0, messageBytes.length);
+                    outputStream.flush();
+                    readMessage();
+                    outputStream.close();
+                    socket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void readMessage() {
+        try {
+            if (inputStream != null) {
+                byte[] buffer = new byte[8192];
+                String message = "";
+                int len = 0;
+                while ((len = inputStream.read(buffer)) != -1) {
+                    message += new String(buffer, 0, len);
+                    if (message.contains("<END>")) {
+                        break;
+                    }
+                }
+                inputStream.close();
+                socket.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -62,7 +117,6 @@ public class TCPClient {
      * 断开socket连接
      */
     public void stopClient() {
-        mRun = false;
         try {
             socket.close();
         } catch (IOException e) {
@@ -70,42 +124,39 @@ public class TCPClient {
         }
     }
 
-    Socket socket;
 
-    public void run() {
-        mRun = true;
-        try {
-            //创建socket连接服务器
-            socket = new Socket(serverip, serverport);
-            try {
-                //发送消息给服务器
-                out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
-                out.println("1 \"Android\"<END>\r\n");
-                out.flush();
-                //从服务器接收消息
-                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                String temp;
-                //while循环监听服务器消息
-                while (mRun) {
-                    while ((temp = in.readLine()) != null) {
-                        serverMessage = in.readLine();
-                        //收到消息回调函数
-                        mMessageListener.messageReceived(serverMessage);
-                    }
-                    serverMessage = null;
-                }
-            } catch (Exception e) {
-                Log.e("TCP SI Error", "SI: Error", e);
-                e.printStackTrace();
-            } finally {
-                //关闭socket，释放资源
-                socket.close();
-            }
-        } catch (Exception e) {
-            Log.e("TCP SI Error", "SI: Error", e);
-        }
-
-    }
+//    public void run() {
+//        try {
+//            //创建socket连接服务器
+//
+//            try {
+//                //发送消息给服务器
+////                outputStream = socket.getOutputStream();
+////                byte[] hand = "1 \"Android\"<END>\r\n".getBytes();
+////                outputStream.write(hand, 0, hand.length);
+////                outputStream.flush();
+//                //从服务器接收消息
+//                inputStream = socket.getInputStream();
+////                byte[] buffer = new byte[8192];
+////                if (inputStream.read(buffer) != -1) {
+////                    int len = inputStream.read(buffer);
+////                    serverMessage = new String(buffer, 0, len);
+////                }
+////                if (serverMessage.contains("<END>")) {
+////                    sendMessage("0 \"OK\"<END>\r\n");
+////                }
+////                mMessageListener.messageReceived(serverMessage);
+//            } catch (Exception e) {
+//                Log.e("TCP SI Error", "SI: Error", e);
+//                e.printStackTrace();
+//            } finally {
+//                //关闭socket，释放资源
+//                socket.close();
+//            }
+//        } catch (Exception e) {
+//            Log.e("TCP SI Error", "SI: Error", e);
+//        }
+//    }
 
     //接收消息的回调接口
     public interface OnMessageReceived {

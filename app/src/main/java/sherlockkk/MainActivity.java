@@ -1,27 +1,44 @@
 package sherlockkk;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.sherlockkk.wechattool.R;
 
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
+
+import sherlockkk.tcp.TCPClient;
+
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
+    private TextView tv_ip;
     private EditText et_ip;
     private EditText et_port;
     private Button btn_go;
+    private Button btn_hand;
     private Config config;
     PowerManager powerManager;
     PowerManager.WakeLock wakeLock;
@@ -54,11 +71,30 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     private void initView() {
         config = new Config();
+        tv_ip = (TextView) findViewById(R.id.tv_ip);
+        if (isWifi()) {
+            tv_ip.setText("本机IP:" + obtainHostIP());
+        } else {
+            tv_ip.setText("请连接wifi网络");
+        }
+
         et_ip = (EditText) findViewById(R.id.et_ip);
         et_port = (EditText) findViewById(R.id.et_port);
         btn_go = (Button) findViewById(R.id.btn_go);
-
         btn_go.setOnClickListener(this);
+        btn_hand = (Button) findViewById(R.id.btn_hand);
+        btn_hand.setOnClickListener(this);
+    }
+
+    private boolean isWifi() {
+        ConnectivityManager conMann = (ConnectivityManager)
+                this.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo wifiNetworkInfo = conMann.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+        if (wifiNetworkInfo.isConnected()) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override
@@ -66,6 +102,17 @@ public class MainActivity extends Activity implements View.OnClickListener {
         switch (v.getId()) {
             case R.id.btn_go:
                 submit();
+                break;
+            case R.id.btn_hand:
+                final String ip = et_ip.getText().toString().trim();
+                final String port = et_port.getText().toString().trim();
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        TCPClient tcpClient = new TCPClient(ip, Integer.parseInt(port));
+                        tcpClient.sendMessage("1 \"Android\"<END>\r\n");
+                    }
+                }).start();
                 break;
         }
     }
@@ -120,5 +167,23 @@ public class MainActivity extends Activity implements View.OnClickListener {
         Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
         startActivity(intent);
         Toast.makeText(this, "请开启辅助服务！", Toast.LENGTH_LONG).show();
+    }
+
+    private String obtainHostIP() {
+        String ip = null;
+        @SuppressLint("WifiManagerLeak") WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+        int ipAddress = wifiInfo.getIpAddress();
+        ip = intToIp(ipAddress);
+        return ip;
+    }
+
+    public static String intToIp(int ipInt) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(ipInt & 0xFF).append(".");
+        sb.append((ipInt >> 8) & 0xFF).append(".");
+        sb.append((ipInt >> 16) & 0xFF).append(".");
+        sb.append((ipInt >> 24) & 0xFF);
+        return sb.toString();
     }
 }

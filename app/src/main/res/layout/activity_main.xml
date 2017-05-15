@@ -5,11 +5,19 @@
     android:orientation="vertical"
     android:padding="16dp">
 
+    <TextView
+        android:id="@+id/tv_ip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
     <EditText
         android:id="@+id/et_ip"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="70dp"
+        android:layout_marginTop="10dp"
         android:hint="请输入ip地址"
         android:inputType="text"
         android:maxLines="1" />
@@ -27,4 +35,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="确定" />
+
+    <Button
+        android:id="@+id/btn_hand"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="握手" />
+
 </LinearLayout>
