@@ -37,6 +37,8 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
     String openTime;//打开红包的时间
     String time;//收到红包消息时间
 
+    int msgType;
+
     public MoneyService() {
     }
 
@@ -81,7 +83,12 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                 if (!texts.isEmpty()) {
                     for (CharSequence text : texts) {
                         String content = text.toString();
-                        if (content.contains("[微信红包]")) {
+                        if (content.contains("[微信红包]") || content.contains("[转账]")) {
+                            if (content.contains("[微信红包]")) {
+                                msgType = 1;
+                            } else if (content.contains("[转账]")) {
+                                msgType = 2;
+                            }
                             //模拟打开通知栏消息，即打开微信
                             if (event.getParcelableData() != null && event.getParcelableData() instanceof Notification) {
                                 Notification notification = (Notification) event.getParcelableData();
@@ -101,8 +108,13 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                 String className = event.getClassName().toString();
                 Log.e(TAG, "onAccessibilityEvent className: " + className);
                 if (className.equals("com.tencent.mm.ui.LauncherUI")) {
-                    sendTcpMsg("3 \"RedPacket Received\"<END>\r\n");
-                    time = getTime();
+                    if (msgType == 1) {//1:红包
+                        sendTcpMsg("3 \"RedPacket Received\"<END>\r\n");
+                        time = getTime();
+                    } else if (msgType == 2) {//2:转账
+                        performActionTransfer(event);
+                        time = getTime();
+                    }
                 } else if (className.equals("com.tencent.mm.plugin.luckymoney.ui.En_fba4b94f")) {
                     Log.e("songjian", "开红包");
                     inputClick("com.tencent.mm:id/bjj");
@@ -128,15 +140,26 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
                             obtainNodeText("com.tencent.mm:id/bfw");
                         }
                     }
-                    performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
-                    performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
-                    performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
+                    backToHome();
+                } else if (className.equals("com.tencent.mm.plugin.remittance.ui.RemittanceDetailUI")) {
+                    obtainTransferNodetext();
+                    backToHome();
                 }
                 break;
             default:
                 break;
         }
     }
+
+    /**
+     * 返回到桌面
+     */
+    private void backToHome() {
+        performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+        performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+        performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME);
+    }
+
 
     /**
      * 通过ID数组获取群红包领取明细
@@ -164,7 +187,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
         }
         ++msgId;
         try {
-            sendTcpMsg("12 " + getJson() + "<END>\r\n");
+            sendTcpMsg("12 " + getRedPacketJson() + "<END>\r\n");
             clearData();
         } catch (JSONException e) {
             e.printStackTrace();
@@ -183,7 +206,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
      * @return
      * @throws JSONException
      */
-    public JSONObject getJson() throws JSONException {
+    public JSONObject getRedPacketJson() throws JSONException {
         JSONObject dict = new JSONObject();
         JSONObject packet = null;
         if (nameList != null) {
@@ -206,6 +229,19 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             packet.put("GroupName", "");
             packet.put("Source", getSender());
         }
+        return packet;
+    }
+
+    public JSONObject getTransferJson() throws JSONException {
+        JSONObject packet = new JSONObject();
+        packet.put("Sender", getSender());
+        packet.put("Title", getTitle());
+        packet.put("OpenTime", openTime);
+        packet.put("TransferAmount", transferAmount);
+        packet.put("MsgID", msgId);
+        packet.put("Time", time);
+        packet.put("GroupName", "");
+        packet.put("Source", getSender());
         return packet;
     }
 
@@ -279,7 +315,7 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             }
             ++msgId;
             try {
-                sendTcpMsg("12 " + getJson() + "<END>\r\n");
+                sendTcpMsg("12 " + getRedPacketJson() + "<END>\r\n");
                 clearData();
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -299,6 +335,42 @@ public class MoneyService extends AccessibilityService implements TCPClient.OnMe
             for (AccessibilityNodeInfo item : list) {
                 item.performAction(AccessibilityNodeInfo.ACTION_CLICK);
             }
+        }
+    }
+
+    /**
+     * 接收转账
+     *
+     * @param event
+     */
+    private void performActionTransfer(AccessibilityEvent event) {
+        //com.tencent.mm:id/a5c ‘微信转账’对话框
+        AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
+        List<AccessibilityNodeInfo> ids = nodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/a5c");
+        ids.get(ids.size() - 1).performAction(AccessibilityNodeInfo.ACTION_CLICK); //点击最新的一条转账记录
+    }
+
+    /**
+     * 通过控件ID直接获取数据
+     */
+    String transferAmount;
+
+    private void obtainTransferNodetext() {
+//        com.tencent.mm:id/c9u    转账金额:￥0.01
+//        com.tencent.mm:id/c9v    确认收款ID
+        AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
+        List<AccessibilityNodeInfo> id1 = nodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/c9u");
+        transferAmount = id1.get(0).getText().toString().substring(1);
+        Log.i(TAG, "obtainTransferNodetext: " + transferAmount);
+        List<AccessibilityNodeInfo> id2 = nodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/c9v");
+        id2.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        openTime = getTime();
+        ++msgId;
+        try {
+            sendTcpMsg("13 " + getTransferJson() + "<END>\r\n");
+            Log.i(TAG, "obtainTransferNodetext getTransferJson: " + getTransferJson());
+        } catch (JSONException e) {
+            e.printStackTrace();
         }
     }
 

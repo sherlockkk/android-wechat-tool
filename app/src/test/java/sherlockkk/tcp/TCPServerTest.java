@@ -28,7 +28,7 @@ public class TCPServerTest implements TCPServer.OnMsgReceived {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                server.run();
+//                server.run();
             }
         }).start();
     }
