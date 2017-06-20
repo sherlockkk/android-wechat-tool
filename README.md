@@ -252,12 +252,5 @@ accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_PASTE);
 > Q: 请问这些类名com.tencent.mm.ui.LauncherUI是如何获取的？
 > A: String className = event.getClassName().toString();使用Log打印出来，打开微信看Log信息
 
-## 13. 其他
-
-[抢红包程序介绍](/2017/04/10/android-wechat-rob/)
-
-[原文：Hensen_的博客](http://img.blog.csdn.net/20161121130452281)
-
-[源码；Github仓库](https://github.com/kompasim/android-wechat-tool)
 
 
